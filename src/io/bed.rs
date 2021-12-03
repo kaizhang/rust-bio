@@ -58,10 +58,17 @@ impl<R: io::Read> Reader<R> {
         }
     }
 
-    /// Iterate over all records.
+    /// Returns an borrowed iterator over all records.
     pub fn records(&mut self) -> Records<'_, R> {
         Records {
             inner: self.inner.deserialize(),
+        }
+    }
+
+    /// Returns an owned iterator over all records.
+    pub fn into_records(self) -> RecordsIntoIter<R> {
+        RecordsIntoIter {
+            inner: self.inner.into_deserialize(),
         }
     }
 }
@@ -78,6 +85,20 @@ impl<'a, R: io::Read> Iterator for Records<'a, R> {
         self.inner.next()
     }
 }
+
+/// An owned iterator over BED records.
+pub struct RecordsIntoIter<R: io::Read> {
+    inner: csv::DeserializeRecordsIntoIter<R, Record>,
+}
+
+impl<R: io::Read> Iterator for RecordsIntoIter<R> {
+    type Item = csv::Result<Record>;
+
+    fn next(&mut self) -> Option<csv::Result<Record>> {
+        self.inner.next()
+    }
+}
+
 
 /// A BED writer.
 #[derive(Debug)]
@@ -404,6 +425,15 @@ mod tests {
 
         let mut reader = Reader::new(BED_FILE);
         for (i, r) in reader.records().enumerate() {
+            let record = r.expect("Error reading record");
+            assert_eq!(record.chrom(), chroms[i]);
+            assert_eq!(record.start(), starts[i]);
+            assert_eq!(record.end(), ends[i]);
+            assert_eq!(record.name().expect("Error reading name"), names[i]);
+            assert_eq!(record.score().expect("Error reading score"), scores[i]);
+        }
+
+        for (i, r) in reader.into_records().enumerate() {
             let record = r.expect("Error reading record");
             assert_eq!(record.chrom(), chroms[i]);
             assert_eq!(record.start(), starts[i]);
